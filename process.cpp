@@ -50,10 +50,22 @@ int Process::getRemainingTimeInBurst() const {
 }
 
 void Process::setRemainingTimeInBurst(int time) {
+    int oldTime = remainingTimeInBurst;
     remainingTimeInBurst = time;
+    
+    // If we're setting a smaller time, add the difference to service time
+    if (state == ProcessState::RUNNING && time < oldTime) {
+        serviceTime += (oldTime - time);
+    }
 }
 
 void Process::decrementRemainingTime(int time) {
+    if (state == ProcessState::RUNNING) {
+        serviceTime += time;
+    } else if (state == ProcessState::BLOCKED) {
+        ioTime += time;
+    }
+    
     remainingTimeInBurst -= time;
     if (remainingTimeInBurst < 0) {
         remainingTimeInBurst = 0;
@@ -61,24 +73,32 @@ void Process::decrementRemainingTime(int time) {
 }
 
 bool Process::hasMoreBursts() const {
-    // Check if we have more CPU or I/O bursts
-    return (isIoBurst() && currentBurst < ioBursts.size()) || 
-           (!isIoBurst() && currentBurst < cpuBursts.size());
+    if (isIoBurst()) {
+        return currentBurst/2 < ioBursts.size();
+    } else {
+        return currentBurst/2 < cpuBursts.size();
+    }
 }
 
 bool Process::isIoBurst() const {
-    // Even numbers are CPU bursts, odd numbers are I/O bursts
     return currentBurst % 2 == 1;
 }
 
 void Process::moveToNextBurst() {
     currentBurst++;
-    if (isIoBurst() && currentBurst < ioBursts.size()) {
-        remainingTimeInBurst = ioBursts[currentBurst / 2];
-    } else if (!isIoBurst() && currentBurst < cpuBursts.size()) {
-        remainingTimeInBurst = cpuBursts[currentBurst / 2];
+    
+    if (isIoBurst()) {
+        if (currentBurst/2 < ioBursts.size()) {
+            remainingTimeInBurst = ioBursts[currentBurst/2];
+        } else {
+            remainingTimeInBurst = 0;
+        }
     } else {
-        remainingTimeInBurst = 0;
+        if (currentBurst/2 < cpuBursts.size()) {
+            remainingTimeInBurst = cpuBursts[currentBurst/2];
+        } else {
+            remainingTimeInBurst = 0;
+        }
     }
 }
 
